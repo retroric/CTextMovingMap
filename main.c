@@ -233,6 +233,14 @@ void play_map() {
     uchar xv, yv;  // coordonnées de départ (offset) de la map pour l'affichage dans la fenêtre
     uchar i, j;
     char *addr;
+    // optimisation v1.1: current_cell_addr = adresse case courante du tableau de la carte à afficher,
+    //      initialisée à chaque "balayage" avec la coordonnée du coin supérieur gauche 
+    //      de la partie visible du tableau de la carte à afficher
+    char *current_cell_addr; // optimisation v1.1
+    
+    #define ADDR_INFOLINE1 (char *) (TEXT_SCREEN + (WY-2)*SCREEN_WIDTH + WX+2)
+    #define ADDR_INFOLINE2 (char *) (ADDR_INFOLINE1 + SCREEN_WIDTH)
+
     uchar key = NO_KEY;
     bool end = FALSE;
 
@@ -251,11 +259,14 @@ void play_map() {
         if(y >= MAP_YSIZE-WIN_YSIZE/2) yv = MAP_YSIZE-WIN_YSIZE;
         // Affichage de la partie de la partie visible de la carte dans la fenêtre
         addr = (char *) (TEXT_SCREEN + (WY+1)*SCREEN_WIDTH + WX+1);
+        current_cell_addr = &map[yv][xv];
         for(i=yv; i < (yv+WIN_YSIZE); i++) {
             for(j=xv; j < (xv+WIN_XSIZE); j++) {
-                *addr++ = map[i][j];
+                //*addr++ = map[i][j];
+                *addr++ = *current_cell_addr++; // optimisation v1.1
             }
             addr += (SCREEN_WIDTH - WIN_XSIZE);
+            current_cell_addr += (MAP_YSIZE - WIN_XSIZE); // optimisation v1.1
         }
         // Affichage personnage: PX et PY sont les coordonnees relatives
         if(x > WIN_XSIZE/2) px = x - xv; else px = x;
@@ -264,10 +275,8 @@ void play_map() {
         *addr = PLAYER;
 
         // affichage infos coordonnées courantes du 'joueur'
-        addr = (char *) (TEXT_SCREEN + (WY-2)*SCREEN_WIDTH + WX+2);
-        sprintf(addr, "X=%d, PX=%d, Y=%d, PY=%d    ", x, px, y, py);
-        addr = (char *) (TEXT_SCREEN + (WY-1)*SCREEN_WIDTH + WX+2);
-        sprintf(addr, "XV=%d, YV=%d  ", xv, yv);
+        sprintf(ADDR_INFOLINE1, "X=%d, PX=%d, Y=%d, PY=%d    ", x, px, y, py);
+        sprintf(ADDR_INFOLINE2, "XV=%d, YV=%d  ", xv, yv);
 
         // Gestion du clavier pour les déplacements et la 'fin de partie'
         key = get_valid_keypress();

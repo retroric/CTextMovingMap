@@ -4,7 +4,7 @@
  *      Démo de carte déroulante texte en C pour Oric
  *      par laurentd75, Jan. 2019
  * 
- *      v1.0, 08/01/19
+ *      v1.1.1, 08/01/19
  * 
  */ 
 
@@ -137,7 +137,7 @@ void init_map() {
 
     for(i=0; i < MAP_YSIZE; i++) {
         map[i][0] = WALL;
-        map[i][MAP_YSIZE-1] = WALL;
+        map[i][MAP_XSIZE-1] = WALL;
     }
 
     // Initialiser l'intérieur de la carte avec des blancs (= cases 'vides')
@@ -259,7 +259,7 @@ void play_map() {
         if(y >= MAP_YSIZE-WIN_YSIZE/2) yv = MAP_YSIZE-WIN_YSIZE;
         // Affichage de la partie de la partie visible de la carte dans la fenêtre
         addr = (char *) (TEXT_SCREEN + (WY+1)*SCREEN_WIDTH + WX+1);
-        current_cell_addr = &map[yv][xv];
+        current_cell_addr = &map[yv][xv]; // optimisation v1.1
         for(i=yv; i < (yv+WIN_YSIZE); i++) {
             for(j=xv; j < (xv+WIN_XSIZE); j++) {
                 //*addr++ = map[i][j];

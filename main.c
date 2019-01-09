@@ -1,10 +1,25 @@
 /**
  *      CTextMovingMap
+ *      ==============
  * 
  *      Démo de carte déroulante texte en C pour Oric
  *      par laurentd75, Jan. 2019
  * 
- *      v1.1.1, 08/01/19
+ *      Version: 1.2
+ *         Date: 10/01/19
+ * 
+ *      Historique:
+ *      -----------------------------------------------------------------------------------------
+ *      v1.0    - première version, accès aux éléments individuels du tableau représentant la carte
+ *      v1.1    - optimisation affichage carte: accès uniquement à 1 élément du tableau (coin supérieur
+ *                gauche de la partie visible) et manipulation de pointeur pour accéder aux éléments
+ *                suivants à afficher. 
+ *                => Gain en rapidité: x4 !!!
+ *      v1.1.1  - petite correction de bug dans init_map() (confusion entre MAP_XSIZE et MAP_YSIZE 
+ *                 dans une des boucles)
+ *      v1.2    - optimisation initialisation carte: limitation accès individuels aux éléments du tableau
+ *                au strict minimum, manipulation de pointeurs pour le reste
+ *                => gain de temps significatif (x2 ?) à l'initialisation
  * 
  */ 
 
@@ -127,27 +142,47 @@ void init_map() {
     uchar i, j, k, kx, ky, n;
     uchar xmax_inside; // coord x max entre les murs d'enceinte
     uchar ymax_inside; // coord y max entre les murs d'enceinte
+    char *cell_addr1, *cell_addr2; // optimisation v1.2
+
 
     // ceinturer la carte de murs ('#') et la remplir de blancs (espaces)
     printf("Ajout des murs d'enceinte...\n");
+
+    // Murs horizontaux haut & bas
+    cell_addr1 = &map[0][0];
+    cell_addr2 = &map[MAP_YSIZE-1][0];
     for(i=0; i < MAP_XSIZE; i++) {
-        map[0][i] = WALL;
-        map[MAP_YSIZE-1][i] = WALL;
+        // map[0][i] = WALL;
+        *cell_addr1++ = WALL;
+        //map[MAP_YSIZE-1][i] = WALL;
+        *cell_addr2++ = WALL;
     }
 
+    // Murs verticaux gauche & droit
+    cell_addr1 = &map[0][0];
+    cell_addr2 = &map[0][MAP_XSIZE-1];
     for(i=0; i < MAP_YSIZE; i++) {
-        map[i][0] = WALL;
-        map[i][MAP_XSIZE-1] = WALL;
+        //map[i][0] = WALL;
+        *cell_addr1 = WALL;
+        cell_addr1 += MAP_XSIZE;
+        //map[i][MAP_XSIZE-1] = WALL;
+        *cell_addr2 = WALL;
+        cell_addr2 += MAP_XSIZE;
+
     }
 
     // Initialiser l'intérieur de la carte avec des blancs (= cases 'vides')
     printf("Remplissage de la carte de blancs...\n");
-    ymax_inside = MAP_YSIZE-1;
-    xmax_inside = MAP_XSIZE-1;
-    for(i = 1; i < ymax_inside; i++) {
-        for(j = 1; j < xmax_inside; j++) {
-            map[i][j] = EMPTY;
+    #define YMAX_INSIDE (MAP_YSIZE-1)
+    #define XMAX_INSIDE (MAP_XSIZE-1)
+
+    cell_addr1 = &map[1][1];
+    for(i = 1; i < YMAX_INSIDE; i++) {
+        for(j = 1; j < XMAX_INSIDE; j++) {
+            //map[i][j] = EMPTY;
+            *cell_addr1++ = EMPTY;
         }
+        cell_addr1 += 2; // sauter case XMAX et case 0 ligne suivante
     }
 
     // Ajouter de 200 a 250 arbres
@@ -166,8 +201,11 @@ void init_map() {
     for(k = 0; k < n; k++) {
         kx = rnd(MAP_XSIZE-4)+1;
         ky = rnd(MAP_YSIZE-2)+1;
-        map[ky][kx++] = HILL1;
-        map[ky][kx]   = HILL2; 
+        //map[ky][kx++] = HILL1;
+        //map[ky][kx]   = HILL2; 
+        cell_addr1 = &map[ky][kx];
+        *cell_addr1++ = HILL1;
+        *cell_addr1   = HILL2; 
     }
 
     // Ajouter de 30 a 50 lacs de 4x3 cases
@@ -178,18 +216,26 @@ void init_map() {
         kx = rnd(MAP_XSIZE-8)+1;
         ky = rnd(MAP_YSIZE-5)+1;
 
-        // 1e ligne
-        map[ky][kx] = WATER; map[ky][kx+1] = WATER; map[ky][kx+2] = WATER;
-        ky++; // Incrémmenter ky pour la ligne suivante
-        kx++; // et incrémenter aussi kx pour décaler d'une case à droite
+        // - 1e ligne du lac
+        //map[ky][kx] = WATER; map[ky][kx+1] = WATER; map[ky][kx+2] = WATER;
+        //ky++; // Incrémmenter ky pour la ligne suivante
+        //kx++; // et incrémenter aussi kx pour décaler d'une case à droite
+        cell_addr1 = &map[ky][kx];
+        *cell_addr1++ = WATER; *cell_addr1++ = WATER; *cell_addr1++ = WATER; *cell_addr1++ = WATER; 
 
-        // 2e ligne
-        map[ky][kx] = WATER; map[ky][kx+1] = WATER; map[ky][kx+2] = WATER;
-        ky++; // Incrémmenter ky pour la ligne suivante
-        kx++; // et incrémenter aussi kx pour décaler d'une case à droite
+        // - 2e ligne du lac
+        //map[ky][kx] = WATER; map[ky][kx+1] = WATER; map[ky][kx+2] = WATER;
+        //ky++; // Incrémmenter ky pour la ligne suivante
+        //kx++; // et incrémenter aussi kx pour décaler d'une case à droite
+        cell_addr1 += MAP_XSIZE; 
+        // on est déjà décalé d'une case à droite après passage à la ligne à cause du dernier 'cell_addr1++'
+        *cell_addr1-- = WATER; *cell_addr1-- = WATER; *cell_addr1-- = WATER; *cell_addr1++ = WATER;
+        // noter le dernier "cell_addr1++" pour se remettre en décalage d'une cellule à droite
 
-        // 3e ligne
-        map[ky][kx] = WATER; map[ky][kx+1] = WATER; map[ky][kx+2] = WATER;
+        // - 3e ligne du lac
+        //map[ky][kx] = WATER; map[ky][kx+1] = WATER; map[ky][kx+2] = WATER;
+        cell_addr1 += MAP_XSIZE; 
+        *cell_addr1++ = WATER; *cell_addr1++ = WATER; *cell_addr1++ = WATER; *cell_addr1 = WATER; 
     }
 }
 

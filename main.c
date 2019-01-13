@@ -5,8 +5,8 @@
  *      Démo de carte déroulante texte en C pour Oric
  *      par laurentd75, Jan. 2019
  * 
- *      Version: 1.2
- *         Date: 10/01/19
+ *      Version: b2_cells_per_byte-v1.0
+ *         Date: 13/01/19
  * 
  *      Historique:
  *      -----------------------------------------------------------------------------------------
@@ -23,8 +23,8 @@
  * 
  *  ========( branche "2_cells_per_byte" basée sur v1.2 branche master ) ====================================
  *  = Expérimentation: compactage du tableau: 1 case (1 octet) représente 2 cellules horizontales:
- *  = quartet inférieur (bits 0 à 3) = cellule de n° impair
- *  = quartet supérieur (bits 4 à 7) = cellule de n° pair
+ *  = - quartet supérieur (bits 4 à 7) = cellule de n° pair
+ *  = - quartet inférieur (bits 0 à 3) = cellule de n° impair
  *  =
  *  =========================================================================================================
  */ 
@@ -70,22 +70,21 @@ typedef unsigned char bool; // boolean
 #define MAP_XSIZE   100
 #define MAP_YSIZE   100
 
-// Manipulation des quartets d'une cellule
-// Le quartet supérieur ("poids fort") représentera TOUJOURS une cellule de n° PAIR
-// Le quartet inférieur ("poids faible") représentera TOUJOURS une cellule de n° IMPAIR
-#define get_high_quartet(val)  ((val & 0xF0) >> 4)
-#define get_low_quartet(val)    (val & 0x0F)
+// Divisions et multiplications entières par multiples de 2
+// en utilisant des opérations de décalage de bits
+// NB: ces macros  n'ont d'intérêt que sur des arguments qui sont des VARIABLES
+//     En effet les calculs sur des littéraux ou des constantes déclarées par #define
+//     sont normalement effectués dès la compilation pour simplifier la valeur
+//     des expressions (à confirmer peut-être pour lcc ??)
+//     
+#define div2(x) ((x) >> 1)
+#define div4(x) ((x) >> 2)
+#define div8(x) ((x) >> 3)
+#define mul2(x) ((x) << 1)
+#define mul4(x) ((x) << 2)
+#define mul8(x) ((x) << 3)
 
-// déterminer si un nombre (n° de case) est pair ou impair: il suffit juste de tester le bit 0 du nombre...
-#define is_even(x) ((x & 1) == 0)
-#define is_odd(x)  ((x & 1) != 0)
 
-// renvoie le quartet de la valeur correspondant au  n° de cellule (quartet inférieur ou supérieur selon si le N° est impair ou pair)
-#define get_cellvalue(x, val) (is_odd(x) ?  get_low_quartet(val) :  get_high_quartet(val))
-
-#define get_map_cell_value(y,x) (is_odd(x) ?  \
-                                       get_low_quartet(map[y][x/2])  \
-                                    :  get_high_quartet(map[y][x/2]))
 
 
 // Caractères utilisés pour la carte, le joueur, et le contour de la fenêtre
@@ -95,9 +94,9 @@ typedef unsigned char bool; // boolean
 #define C_WATER  '%'
 #define C_HILL1  '/'
 #define C_HILL2  '\\'  // Rappel: en C il faut doubler le caractère antislash, qui est sinoninterprété
-                     // comme un caractère 'escape' introduisant une séquence de contrôle (ex: '\n')
+                       // comme un caractère 'escape' introduisant une séquence de contrôle (ex: '\n')
 #define C_PLAYER '*'
-#define C_CHECKERBOARD 126 // caractère 'damier'
+#define C_CHECKERBOARD ((char) 126) // caractère 'damier'
 
 
 // Valeurs de chaque type de case, sur 4 bits maxi (donc 16 valeurs max possibles, de 0 à 15)
@@ -108,10 +107,27 @@ typedef unsigned char bool; // boolean
 #define V_HILL1 ((char) 4)
 #define V_HILL2 ((char) 5)
 
-// tableau indexé des caractères C_xxx (indexé par constantes V_xxx)
+// tableau indexé des caractères C_xxx correspondant aux constantes V_xxx (indexé par constantes V_xxx)
 char c_values[] = { C_EMPTY, C_WALL, C_TREE, C_WATER, C_HILL1, C_HILL2};
 
 #define get_cvalue(v_value) (c_values[v_value])
+
+// déterminer si un nombre (n° de case) est pair ou impair: il suffit juste de tester le bit 0 du nombre...
+#define is_even(x) (((x) & 1) == 0)
+#define is_odd(x)  (((x) & 1) != 0)
+
+// Manipulation des quartets d'une cellule
+// Le quartet supérieur ("poids fort") représentera TOUJOURS une cellule de n° PAIR
+// Le quartet inférieur ("poids faible") représentera TOUJOURS une cellule de n° IMPAIR
+#define get_high_quartet(val)  (((val) & 0xF0) >> 4)
+#define get_low_quartet(val)    ((val) & 0x0F)
+
+// renvoie le quartet de la valeur correspondant au  n° de cellule (quartet inférieur ou supérieur selon si le N° est impair ou pair)
+#define get_cellvalue(x, val) (is_odd(x) ?  get_low_quartet(val) :  get_high_quartet(val))
+
+#define get_map_cell_value(y,x) (is_odd(x) ?  \
+                                       get_low_quartet(map[y][div2(x)])  \
+                                    :  get_high_quartet(map[y][div2(x)]))
 
 // pour affecter une double valeur, on passera TOUJOUTS les quartets dans l'ordre (SUPERIEUR, INFERIEUR)
 // pour correspondre à l'ordre des cases (1ere case PAIRE? 2e case IMPAIRE)
@@ -151,7 +167,7 @@ uchar get_valid_keypress();
 void  test_keys();
 void  hide_cursor();
 void  show_cursor();
-
+void  test_division_entiere();
 
 /* ================== IMPLEMENTATION DES FONCTIONS ================== */
 
@@ -164,6 +180,9 @@ void main() {
     cls(); paper(4); ink(2);
 
     hide_cursor();
+
+    // Test division entiere
+    //test_division_entiere();
 
     display_title_screen();
     init_map();
@@ -179,6 +198,15 @@ void main() {
 }
 
 
+void test_division_entiere() {
+    char i;
+
+    for(i=0; i <= 16; i++) {
+        printf("i=%d, i/2=%d, i>>1=%d\n", i, i/2, i>>1);
+    }
+    printf("\nPress SPACE");
+    wait_spacekey();
+}
 
 /** 
  * init_map(): initialisation du tableau représentant la carte 
@@ -198,35 +226,37 @@ void init_map() {
     cell_addr2 = &map[MAP_YSIZE-1][0];
     for(i=0; i < MAP_XSIZE/2; i++) {
         // map[0][i] = WALL;
-        *cell_addr1++ = combine_cellvalues(V_WALL, V_WALL);
+        set_cellvalues(cell_addr1++, V_WALL, V_WALL);
         //map[MAP_YSIZE-1][i] = WALL;
-        *cell_addr2++ = combine_cellvalues(V_WALL, V_WALL);
+        set_cellvalues(cell_addr2++, V_WALL, V_WALL);
     }
 
     // Murs verticaux gauche/droit, avec case vide après/avant
-    cell_addr1 = &map[0][0];
-    cell_addr2 = &map[0][MAP_XSIZE/2-1];
-    for(i=0; i < MAP_YSIZE; i++) {
+    cell_addr1 = &map[1][0];
+    cell_addr2 = &map[1][MAP_XSIZE/2-1];
+    for(i=1; i < (MAP_YSIZE-1); i++) {
         //map[i][0] = WALL;
-        *cell_addr1 = combine_cellvalues(V_WALL, V_EMPTY);
+        set_cellvalues(cell_addr1, V_WALL, V_EMPTY);
         cell_addr1 += MAP_XSIZE/2;
         //map[i][MAP_XSIZE-1] = WALL;
-        *cell_addr2 = combine_cellvalues(V_EMPTY, V_WALL);
+        set_cellvalues(cell_addr2, V_EMPTY, V_WALL);
         cell_addr2 += MAP_XSIZE/2;
     }
 
     // Initialiser l'intérieur de la carte avec des blancs (= cases 'vides')
     printf("Remplissage de la carte de blancs...\n");
     #define YMAX_INSIDE (MAP_YSIZE-1)
-    #define XMAX_INSIDE (MAP_XSIZE/2-2)
+    #define XMAX_INSIDE (MAP_XSIZE/2-1)
 
-    cell_addr1 = &map[1][2];
+    cell_addr1 = &map[1][1];
     for(i = 1; i < YMAX_INSIDE; i++) {
         for(j = 1; j < XMAX_INSIDE; j++) {
             //map[i][j] = EMPTY;
-            *cell_addr1++ = combine_cellvalues(V_EMPTY, V_EMPTY);
+            set_cellvalues(cell_addr1, V_EMPTY, V_EMPTY);
+            cell_addr1++;
+
         }
-        cell_addr1 += 2; // sauter double case (XMAX-2,XMAX-1) et double case (0,1) de la ligne suivante
+        cell_addr1 += 2; // sauter double case (XMAX-2, XMAX-1) et double case (0,1) de la ligne suivante
     }
 
     // Ajouter de 200 a 250 arbres
@@ -238,19 +268,20 @@ void init_map() {
     for(k = 0; k < n; k++) {
         kx = rnd(MAP_YSIZE-3)+1;
         ky = rnd(MAP_XSIZE-3)+1;
-        map[ky][kx/2] = is_even(kx) ? combine_cellvalues(V_TREE, V_EMPTY) : combine_cellvalues(V_EMPTY, V_TREE);
+        map[ky][div2(kx)] = is_even(kx) ? combine_cellvalues(V_TREE, V_EMPTY) : combine_cellvalues(V_EMPTY, V_TREE);
     }
     // Ajouter de 60 a 100 montagnes
    n = rnd(60)+41; // ne marche pas si #include <lib.h>
    //n = 71;
     printf("Ajout de %d montagnes...\n", n);
     for(k = 0; k < n; k++) {
-        kx = rnd(MAP_XSIZE-4)+1;
+        kx = rnd(MAP_XSIZE-5)+1;
         ky = rnd(MAP_YSIZE-2)+1;
         //map[ky][kx++] = HILL1;
-        //map[ky][kx]   = HILL2; 
-        cell_addr1 = &map[ky][kx/2];
-        *cell_addr1   =  combine_cellvalues(V_HILL1, V_HILL2); 
+        //map[ky][kx]   = HILL2;
+        if(is_odd(kx)) kx++; // Pour simplifier on "aligne" le début d'une montagne sur une case "paire"
+        cell_addr1 = &map[ky][div2(kx)];
+        set_cellvalues(cell_addr1, V_HILL1, V_HILL2); 
     }
 
     // Ajouter de 30 a 50 lacs de 4x3 cases
@@ -266,8 +297,8 @@ void init_map() {
         //ky++; // Incrémmenter ky pour la ligne suivante
         //kx++; // et incrémenter aussi kx pour décaler d'une case à droite
         cell_addr1 = &map[ky][kx/2];
-        *cell_addr1++ = combine_cellvalues(V_WATER, V_WATER); 
-        *cell_addr1++ = combine_cellvalues(V_WATER, V_WATER);
+        set_cellvalues(cell_addr1++, V_WATER, V_WATER); 
+        set_cellvalues(cell_addr1++, V_WATER, V_WATER); 
 
         // - 2e ligne du lac
         //map[ky][kx] = WATER; map[ky][kx+1] = WATER; map[ky][kx+2] = WATER;
@@ -275,16 +306,16 @@ void init_map() {
         //kx++; // et incrémenter aussi kx pour décaler d'une case à droite
         cell_addr1 += MAP_XSIZE/2; 
         // on est déjà décalé d'une case à droite après passage à la ligne à cause du dernier 'cell_addr1++'
-        *cell_addr1-- = combine_cellvalues(V_WATER, V_EMPTY); 
-        *cell_addr1-- = combine_cellvalues(V_WATER, V_WATER);
-        *cell_addr1++ = combine_cellvalues(V_EMPTY, V_WATER);
+        set_cellvalues(cell_addr1--, V_WATER, V_EMPTY); 
+        set_cellvalues(cell_addr1--, V_WATER, V_WATER); 
+        set_cellvalues(cell_addr1++, V_EMPTY, V_WATER); 
         // noter le dernier "cell_addr1++" pour se remettre en décalage d'une cellule à droite
 
         // - 3e ligne du lac
         //map[ky][kx] = WATER; map[ky][kx+1] = WATER; map[ky][kx+2] = WATER;
-        cell_addr1 += MAP_XSIZE/2; 
-        *cell_addr1++ = combine_cellvalues(V_WATER, V_WATER);
-        *cell_addr1   = combine_cellvalues(V_WATER, V_WATER);; 
+        cell_addr1 += MAP_XSIZE/2;
+        set_cellvalues(cell_addr1++, V_WATER, V_WATER); 
+        set_cellvalues(cell_addr1,   V_WATER, V_WATER); 
     }
 }
 
@@ -354,7 +385,7 @@ void play_map() {
         if(y >= MAP_YSIZE-WIN_YSIZE/2) yv = MAP_YSIZE-WIN_YSIZE;
         // Affichage de la partie de la partie visible de la carte dans la fenêtre
         addr = (char *) (TEXT_SCREEN + (WY+1)*SCREEN_WIDTH + WX+1);
-        current_cell_addr = &map[yv][xv/2]; // optimisation v1.1
+        current_cell_addr = &map[yv][div2(xv)]; // optimisation v1.1
         for(i=yv; i < (yv+WIN_YSIZE); i++) {
             for(j=xv; j < (xv+WIN_XSIZE); j++) {
                 // *addr++ = map[i][j];
@@ -369,13 +400,21 @@ void play_map() {
                                get_cvalue(get_cellvalue(j, *current_cell_addr)));
                 wait_spacekey();
                 */
-               
-                *addr++ = get_cvalue(get_cellvalue(j, *current_cell_addr));
-                if(is_even(j)) *current_cell_addr++; // incrémenter cellule tableau uniquement après case impaire
 
+                //*addr++ = get_cvalue(get_cellvalue(j, *current_cell_addr));
+                if(is_odd(j)) {
+                    // NB: on incrémente le pointeur de cellule du tableau uniquement après case impaire
+                    *addr++ = get_cvalue(get_low_quartet(*current_cell_addr++));
+                } 
+                else { // even
+                    *addr++ = get_cvalue(get_high_quartet(*current_cell_addr));
+                    // NB: ici, pas d'incrément du pointeur current_cell_addr, car case paire
+                    // et la prochaine case impaire à afficher est la valeur du quartet inférieur
+                }
             }
             addr += (SCREEN_WIDTH - WIN_XSIZE);
-            current_cell_addr += (MAP_YSIZE - WIN_XSIZE/2); // optimisation v1.1
+            current_cell_addr += (MAP_XSIZE - WIN_XSIZE)/2;
+
         }
         // Affichage personnage: PX et PY sont les coordonnees relatives
         if(x > WIN_XSIZE/2) px = x - xv; else px = x;
